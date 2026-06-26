@@ -259,7 +259,7 @@ class ScriptTreeGenerator {
             const name = block.fields.VALUE.value;
             const index = this.script.arguments.lastIndexOf(name);
             if (index === -1) {
-                if (name.toLowerCase() === 'is compiled?' || name.toLowerCase() === 'is nitrobolt?') {
+                if (name.toLowerCase() === 'is compiled?' || name.toLowerCase() === 'is magicmod?') {
                     return this.createConstantInput(true).toType(InputType.BOOLEAN);
                 }
                 return this.createConstantInput(0);
