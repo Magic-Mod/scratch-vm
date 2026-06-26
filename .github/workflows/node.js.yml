@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm innstall
       - run: npm run lint
       - run: npm run build
       - run: npm run tap
