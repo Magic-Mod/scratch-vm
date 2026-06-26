@@ -153,7 +153,7 @@ class Scratch3ProcedureBlocks {
             if (util.target.runtime.compilerOptions.enabled && lowercaseValue === 'is compiled?') {
                 return true;
             }
-            if (lowercaseValue === 'is nitrobolt?') {
+            if (lowercaseValue === 'is magicmod?') {
                 return true;
             }
             // When the parameter is not found in the most recent procedure
