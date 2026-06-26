@@ -4,7 +4,7 @@ This is a drop-in replacement for `LLK/scratch-vm`.
 
 ## Setup
 
-See [getting started](https://docs.turbowarp.org/development/getting-started) to setup the complete NitroBolt environment.
+See [getting started](https://docs.turbowarp.org/development/getting-started) to setup the complete MagicMod environment.
 
 If you just want to play with the VM then it's the same process as upstream `scratch-vm`.
 
