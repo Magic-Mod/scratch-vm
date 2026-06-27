@@ -25,6 +25,8 @@ const defaultBuiltinExtensions = {
     makeymakey: () => require('../extensions/scratch3_makeymakey'),
     boost: () => require('../extensions/scratch3_boost'),
     gdxfor: () => require('../extensions/scratch3_gdx_for'),
+    clipblocks: () => require('../extensions/clipblocks'),
+    libra: () => require('../extensions/scp_libra'),
     wonderblocks: () => require('../extensions/scratch3_wonderblocks'),
     appmaker: () => require('../extensions/scratch3_appmaker'),
     // tw: core extension
