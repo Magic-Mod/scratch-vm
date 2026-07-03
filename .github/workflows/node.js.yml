@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          submodules: false
       - run: npm ci
       - run: npm run lint
       - run: npm run build
