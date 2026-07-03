@@ -14,9 +14,8 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
-          submodules: false
       - run: npm ci
       - run: npm run lint
       - run: npm run build
