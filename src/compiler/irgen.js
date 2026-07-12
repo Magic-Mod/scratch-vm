@@ -20,6 +20,17 @@ const oldCompilerCompatiblity = require('./old-compiler-compatibility.js');
  * @fileoverview Generate intermediate representations from Scratch blocks.
  */
 
+/**
+ * @typedef BlockInfo
+ * @property {string} opcode
+ * @property {BlockType} blockType
+ */
+
+/**
+ * @typedef CategoryInfo
+ * @property {{info: BlockInfo}[]} blocks
+ */
+
 /* eslint-disable max-len */
 
 const SCALAR_TYPE = '';
@@ -59,6 +70,7 @@ const parseProcedureCode = variant => variant.substring(1);
 const parseIsWarp = variant => variant.charAt(0) === 'W';
 
 class ScriptTreeGenerator {
+    /** @param {import('../engine/thread.js')} thread */
     constructor (thread) {
         /** @private */
         this.thread = thread;
@@ -66,8 +78,13 @@ class ScriptTreeGenerator {
         this.target = thread.target;
         /** @private */
         this.blocks = thread.blockContainer;
-        /** @private */
+
+        /**
+         * @type {import('../engine/runtime.js')}
+         * @private
+         */
         this.runtime = this.target.runtime;
+
         /** @private */
         this.stage = this.runtime.getTargetForStage();
 
@@ -106,6 +123,7 @@ class ScriptTreeGenerator {
         );
     }
 
+    /** @param {string} procedureVariant */
     setProcedureVariant (procedureVariant) {
         const procedureCode = parseProcedureCode(procedureVariant);
 
@@ -127,16 +145,19 @@ class ScriptTreeGenerator {
         this.script.isWarp = true;
     }
 
+    /** @param {string} blockId */
     getBlockById (blockId) {
         // Flyout blocks are stored in a special container.
         return this.blocks.getBlock(blockId) || this.blocks.runtime.flyoutBlocks.getBlock(blockId);
     }
 
+    /** @param {string} fullOpcode */
     getBlockInfo (fullOpcode) {
         const [category, opcode] = StringUtil.splitFirst(fullOpcode, '_');
         if (!category || !opcode) {
             return null;
         }
+        /** @type {CategoryInfo} */
         const categoryInfo = this.runtime._blockInfo.find(ci => ci.id === category);
         if (!categoryInfo) {
             return null;
@@ -148,6 +169,11 @@ class ScriptTreeGenerator {
         return blockInfo;
     }
 
+    /**
+     * @param {any} constant
+     * @param {boolean} preserveStrings
+     * @returns
+     */
     createConstantInput (constant, preserveStrings = false) {
         if (constant === null) throw new Error('IR: Constant cannot have a null value.');
 
@@ -391,7 +417,7 @@ class ScriptTreeGenerator {
             });
         }
         case 'json_value_of_key':
-            return new IntermediateInput(InputOpcode.JSON_VALUE_OF_KEY, InputType.STRING, {
+            return new IntermediateInput(InputOpcode.JSON_VALUE_OF_KEY, InputType.ANY, {
                 key: this.descendInputOfBlock(block, 'KEY').toType(InputType.STRING),
                 object: this.descendInputOfBlock(block, 'OBJ', false,
                     new IntermediateInput(InputOpcode.JSON_NEW_OBJECT, InputType.OBJECT)).toType(InputType.OBJECT)
@@ -401,7 +427,7 @@ class ScriptTreeGenerator {
                 key: this.descendInputOfBlock(block, 'KEY').toType(InputType.STRING),
                 object: this.descendInputOfBlock(block, 'OBJ', false,
                     new IntermediateInput(InputOpcode.JSON_NEW_OBJECT, InputType.OBJECT)).toType(InputType.OBJECT),
-                value: this.descendInputOfBlock(block, 'VALUE').toType(InputType.STRING)
+                value: this.descendInputOfBlock(block, 'VALUE')
             });
         case 'json_delete_key':
             return new IntermediateInput(InputOpcode.JSON_DELETE_KEY, InputType.OBJECT, {
@@ -933,11 +959,25 @@ class ScriptTreeGenerator {
             });
         case 'sensing_username':
             return new IntermediateInput(InputOpcode.SENSING_USERNAME, InputType.STRING);
+        case 'sensing_loudness':
+            return new IntermediateInput(InputOpcode.SENSING_LOUDNESS, InputType.NUMBER);
+        case 'sensing_loud':
+            return new IntermediateInput(InputOpcode.SENSING_LOUD, InputType.BOOLEAN);
+        case 'sensing_online':
+            return new IntermediateInput(InputOpcode.SENSING_ONLINE, InputType.BOOLEAN);
 
         case 'sound_sounds_menu':
             // This menu is special compared to other menus -- it actually has an opcode function.
             return this.createConstantInput(block.fields.SOUND_MENU.value, true);
+        case 'sound_volume':
+            return new IntermediateInput(InputOpcode.SOUND_VOLUME, InputType.NUMBER);
 
+        case 'control_inline_if_else':
+            return new IntermediateInput(InputOpcode.CONTROL_INLINE_IF_ELSE, InputType.ANY, {
+                operand: this.descendInputOfBlock(block, 'OPERAND').toType(InputType.BOOLEAN),
+                then: this.descendInputOfBlock(block, 'THEN'),
+                else: this.descendInputOfBlock(block, 'ELSE')
+            });
         case 'control_foreach_in_range_item':
             return new IntermediateInput(InputOpcode.CONTROL_FOREACH_IN_RANGE_ITEM, InputType.NUMBER);
         case 'control_get_counter':
@@ -1107,7 +1147,7 @@ class ScriptTreeGenerator {
                     do: this.descendSubstack(block, `SUBSTACKBRANCHES_${i}_BRANCH`)
                 });
             }
-            const elseBranch = this.descendSubstack(block, 'ELSE_BRANCH');
+            const elseBranch = this.descendSubstack(block, 'SUBSTACKELSE_BRANCH');
             return new IntermediateStackBlock(StackOpcode.CONTROL_IF_ELSE_EXTENDABLE, {branches, count, elseBranch});
         }
         case 'control_switch': {
@@ -1119,7 +1159,7 @@ class ScriptTreeGenerator {
                     do: this.descendSubstack(block, `SUBSTACKCASES_${i}_BRANCH`)
                 });
             }
-            const defaultBranch = this.descendSubstack(block, 'DEFAULT_BRANCH');
+            const defaultBranch = this.descendSubstack(block, 'SUBSTACKDEFAULT_BRANCH');
             return new IntermediateStackBlock(StackOpcode.CONTROL_SWITCH, {
                 switch: this.descendInputOfBlock(block, 'SWITCH'),
                 cases,
@@ -1452,19 +1492,9 @@ class ScriptTreeGenerator {
 
         case 'sensing_resettimer':
             return new IntermediateStackBlock(StackOpcode.SENSING_TIMER_RESET);
-
-        case 'comments_hat':
-            return new IntermediateStackBlock(StackOpcode.COMMENTS_HAT, {
-                comment: this.descendInputOfBlock(block, 'COMMENT').toType(InputType.STRING)
-            });
-        case 'comments_command':
-            return new IntermediateStackBlock(StackOpcode.COMMENTS_COMMAND, {
-                comment: this.descendInputOfBlock(block, 'COMMENT').toType(InputType.STRING)
-            });
-        case 'comments_loop':
-            return new IntermediateStackBlock(StackOpcode.COMMENTS_LOOP, {
-                comment: this.descendInputOfBlock(block, 'COMMENT').toType(InputType.STRING),
-                do: this.descendSubstack(block, 'SUBSTACK')
+        case 'sensing_setdragmode':
+            return new IntermediateStackBlock(StackOpcode.SENSING_SET_DRAG_MODE, {
+                draggable: block.fields.DRAG_MODE.value === 'draggable'
             });
 
         default: {
@@ -1553,10 +1583,12 @@ class ScriptTreeGenerator {
             return {opcode: StackOpcode.NOP, yields: false};
         }
 
+        /** @type {[string[], string[], string[]]} */
         const [paramNames, paramIds, paramDefaults] = paramNamesIdsAndDefaults;
 
         const addonBlock = this.runtime.getAddonBlock(procedureCode);
         if (addonBlock) {
+            /** @type {Record<string, IntermediateInput>} */
             const args = {};
             for (let i = 0; i < paramIds.length; i++) {
                 let value;
@@ -1667,9 +1699,9 @@ class ScriptTreeGenerator {
     }
 
     /**
-     * @param {string|null} id The ID of the variable.
+     * @param {string} id The ID of the variable.
      * @param {string} name The name of the variable.
-     * @param {''|'list'|'table'} type The variable type.
+     * @param {'' | 'list' | 'table'} type The variable type.
      * @private
      * @returns {DescendedVariable} A parsed variable object.
      */
@@ -1768,7 +1800,9 @@ class ScriptTreeGenerator {
      * @returns {IntermediateInput} The parsed node.
      */
     descendCompatLayerInput (block) {
+        /** @type {Record<string, any>} */
         const inputs = {};
+        /** @type {Record<string, any>} */
         const fields = {};
         for (const name of Object.keys(block.inputs)) {
             inputs[name] = this.descendInputOfBlock(block, name, true);
@@ -1791,6 +1825,7 @@ class ScriptTreeGenerator {
      * @returns {IntermediateStackBlock} The parsed node.
      */
     descendCompatLayerStack (block) {
+        /** @type {Record<string, IntermediateInput>} */
         const inputs = {};
         for (const name of Object.keys(block.inputs)) {
             if (!name.startsWith('SUBSTACK')) {
@@ -1798,6 +1833,7 @@ class ScriptTreeGenerator {
             }
         }
 
+        /** @type {Record<string, any>} */
         const fields = {};
         for (const name of Object.keys(block.fields)) {
             fields[name] = block.fields[name].value;
@@ -1805,6 +1841,7 @@ class ScriptTreeGenerator {
 
         const blockInfo = this.getBlockInfo(block.opcode);
         const blockType = (blockInfo && blockInfo.info && blockInfo.info.blockType) || BlockType.COMMAND;
+        /** @type {Record<number, IntermediateStack>} */
         const substacks = {};
         if (blockType === BlockType.CONDITIONAL || blockType === BlockType.LOOP) {
             for (const inputName in block.inputs) {
@@ -1830,6 +1867,7 @@ class ScriptTreeGenerator {
         return !this.script.isWarp || this.script.warpTimer;
     }
 
+    /** @param {string} commentId */
     readTopBlockComment (commentId) {
         const comment = this.target.comments[commentId];
         if (!comment) {
@@ -1868,6 +1906,7 @@ class ScriptTreeGenerator {
     walkHat (hatBlock) {
         const nextBlock = hatBlock.next;
         const opcode = hatBlock.opcode;
+        /** @type {any} */
         const hatInfo = this.runtime._hats[opcode];
 
         if (this.thread.stackClick) {
@@ -1965,6 +2004,7 @@ class ScriptTreeGenerator {
 }
 
 class IRGenerator {
+    /** @param {import('../engine/thread')} thread */
     constructor (thread) {
         this.thread = thread;
         this.blocks = thread.blockContainer;
@@ -1977,6 +2017,7 @@ class IRGenerator {
         this.analyzedProcedures = new Set();
     }
 
+    /** @param {string[]} dependencies */
     addProcedureDependencies (dependencies) {
         for (const procedureVariant of dependencies) {
             if (Object.prototype.hasOwnProperty.call(this.procedures, procedureVariant)) {
